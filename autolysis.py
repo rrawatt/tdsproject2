@@ -31,6 +31,7 @@ def parse_args():
 
 args = parse_args()
 file_path = args.filename 
+file_name = os.path.basename(file_path)
 
 def load_data(file_path):
     """Load CSV data with encoding detection using common encodings."""
@@ -208,10 +209,21 @@ def request_api_data(prompt):
 
 def generate_narrative(analysis):
     """Generate narrative using LLM."""
-    prompt = f'''You are a Data Analyst. Here is some pre-analyzed data in the form of a dictionary: {analysis}. 
-    Use the dictionary to generate insights and what it could mean in the form of a README.md file.
-    Incorporate 'correlation_heatmap.png', 'numeric_columns_boxplot.png', 'correlation_heatmap.png' which already exist in the directory.
-    Do not write anything other than the README.md content.'''
+    prompt = f'''You are a skilled Data Analyst tasked with providing insights from a dataset. The dataset has been analyzed and pre-processed, and here are the key results in the form of a dictionary: {analysis}. 
+
+Based on this data analysis, generate a detailed README.md document that provides:
+1. A brief summary of the dataset (including its general structure, types of variables, and the analysis objectives).
+2. Insights derived from the statistical analysis (such as trends, correlations, and patterns in the data).
+3. A description of the findings related to any outliers, class imbalances, skewness, and kurtosis.
+4. An interpretation of the correlation matrix, highlighting key relationships between variables.
+5. Any actionable recommendations or considerations based on the feature importance and class imbalance (if applicable).
+6. Visuals have already been generated and included in the directory. Incorporate the following visualizations into your narrative:
+    - 'correlation_heatmap.png': A heatmap of correlations between numerical variables.
+    - 'numeric_columns_boxplot.png': Boxplots of numerical columns for distribution and outlier visualization.
+    - 'scatter_matrix.png': A scatter plot matrix for visualizing pairwise relationships between the first five numerical features.
+
+Do not include any code or technical details outside of the README content. Focus on providing a clear, professional, and insightful narrative suitable for a non-technical audience, with a focus on how the data can be interpreted and utilized for further analysis or decision-making.'''
+
     return request_api_data(prompt)
 
 def main(file_path):

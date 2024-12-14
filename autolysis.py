@@ -2,7 +2,12 @@ import json
 import http.client
 import pandas as pd
 import numpy as np
+import subprocess
 import argparse
+import sys
+import os
+import io
+
 
 AIPROXY_TOKEN = 'token' 
 
@@ -107,7 +112,7 @@ def generate_plan(data_text):
     """
 
     return request_api_data(prompt)
-'''
+
 def generate_code(plan):
     prompt = f"""
 You will be given some information and guidelines. Your role is to do accordingly and write the code in Python for the Data Analysis as prescribed for the research.
@@ -180,21 +185,16 @@ def generate_report(plan,code,dictionary):
 
 
 def main(): 
-    with open("output2.txt", "w") as file:
-        plan = generate_plan(data_text)
-        file.write(plan)
-        code = generate_code(plan)
-        code = code.replace('python', '').strip()
-        code  = code.replace('```', '').strip()
-        file.write(code)
-        dictionary = run_code(code)
-        file.write(dictionary)
-        report = generate_report(plan, code, dictionary)
-        file.write(report)       
+    plan = generate_plan(data_text)
+    code = generate_code(plan)
+    code = code.replace('python', '').strip()
+    code  = code.replace('```', '').strip()
+    dictionary = run_code(code)
+    report = generate_report(plan, code, dictionary)
+    report=report.replace('markdown', '').strip()
+    report=report.replace('```', '').strip()
     with open('README.md', 'w') as file:
-        file.write(report)'''
+        file.write(report)
 
-def main():
-    print()
 if __name__ == "__main__":
     main()

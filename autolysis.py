@@ -14,8 +14,10 @@ import sys
 import json
 import pandas as pd
 import seaborn as sns
-import matplotlib.pyplot as plt
+import matplotlib
 matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+
 import http.client
 import argparse
 import io

@@ -4,12 +4,11 @@
 #   "seaborn",
 #   "pandas",
 #   "matplotlib",
-#   "scikit.learn",
-#   "scipy"
+#   "scikit-learn",
+#   "scipy",
 #   "numpy"
 # ]
 # ///
-
 
 import os
 import sys
@@ -17,15 +16,18 @@ import json
 import pandas as pd
 import seaborn as sns
 import matplotlib
-matplotlib.use('Agg')  # Use the non-interactive backend
-import matplotlib.pyplot as plt
-import http.client
-import argparse
 from sklearn.decomposition import PCA
 from scipy.stats import chi2_contingency, f_oneway
 import numpy as np
+import matplotlib.pyplot as plt
+import http.client
+import argparse
+
+# Use the non-interactive matplotlib backend
+matplotlib.use('Agg')
 
 
+# === Argument Parsing ===
 def parse_args():
     parser = argparse.ArgumentParser(description="Data Analysis Script")
     parser.add_argument('filename', type=str, help='Path to the CSV file')
@@ -35,6 +37,8 @@ args = parse_args()
 file_path = args.filename 
 file_name = os.path.basename(file_path)
 
+
+# === Data Loading ===
 def load_data(file_path):
     """Load CSV data with encoding detection using common encodings."""
     if not os.path.isfile(file_path):
@@ -55,6 +59,8 @@ def load_data(file_path):
     print("Failed to load file with all common encodings.")
     sys.exit(1)
 
+
+# === Data Analysis ===
 def analyze_data(df):
     """Perform comprehensive data analysis including summary statistics, missing values, outlier detection, skewness, kurtosis, PCA, Chi-Squared, ANOVA, and feature importance."""
     if df.empty:
@@ -65,15 +71,11 @@ def analyze_data(df):
     numeric_df = df.select_dtypes(include=['number'])
     categorical_df = df.select_dtypes(include=['object'])
 
-    # Initialize the analysis dictionary
     analysis = {}
 
     # 1. Summary statistics
     analysis['summary'] = df.describe(include='all').to_dict()
     print("Summary statistics calculated.")
-
-    # Interpretation for Summary:
-    # Provides an overview of central tendency, spread, and shape. It helps identify extreme values, potential issues, and the overall structure.
 
     # 2. Missing values
     analysis['missing_values'] = df.isnull().sum().to_dict()
@@ -164,6 +166,10 @@ def analyze_data(df):
     else:
         print("Not enough categorical or numeric variables to perform ANOVA.")
 
+    return analysis
+
+
+# === Data Visualization ===
 def visualize_data(df):
     """Generate and save general visualizations for numerical and categorical data."""
     sns.set_theme(style="whitegrid")
@@ -178,7 +184,6 @@ def visualize_data(df):
         plt.savefig('correlation_heatmap.png')
         plt.close()
         print("Correlation heatmap generated.")
-
     else:
         print("Insufficient numeric columns for correlation heatmap.")
 
@@ -208,77 +213,56 @@ def visualize_data(df):
     else:
         print("Insufficient numeric columns for scatter matrix.")
 
+
+# === API Request for Narrative Generation ===
 def request_api_data(prompt):
     """Send request to API for narrative generation using http.client."""
     API_URL = "/openai/v1/chat/completions"
     AIPROXY_TOKEN = os.getenv("AIPROXY_TOKEN")  # Now using env variable
-    # Define the host and endpoint
     host = "aiproxy.sanand.workers.dev"
     endpoint = "/openai/v1/chat/completions"
     
-    # Prepare the headers and data for the request
+    # Prepare headers and data
     headers = {
         "Content-Type": "application/json",
         "Authorization": f"Bearer {AIPROXY_TOKEN}"
     }
-
-    # Prepare the data to send in the request
     data = {
         "model": "gpt-4o-mini",
         "messages": [{"role": "system", "content": "You are a helpful Data Analyst."},
                      {"role": "user", "content": prompt}]
     }
-
-    # Convert the data dictionary to JSON format
     json_data = json.dumps(data)
-
-    # Create a connection to the host
     conn = http.client.HTTPSConnection(host)
 
     try:
-        # Send the POST request with the data and headers
         conn.request("POST", endpoint, body=json_data, headers=headers)
-
-        # Get the response from the API
         response = conn.getresponse()
-        response_data = response.read().decode()  # Read and decode the response
+        response_data = response.read().decode()
 
-        # Check if response is successful (status code 200-299)
         if response.status >= 200 and response.status < 300:
             response_json = json.loads(response_data)
             return response_json['choices'][0]['message']['content']
         else:
             print(f"HTTPError: {response.status} - {response_data}")
             return {"error": f"HTTPError: {response.status}", "details": response_data}
-
+    
     except Exception as e:
-        # Catch any exceptions and provide an error message
         print(f"An error occurred: {str(e)}")
         return {"error": "Unknown error", "details": str(e)}
     
     finally:
-        # Always close the connection to avoid any resource leaks
         conn.close()
 
+
+# === Main Process ===
 def generate_questions(df):
-    prompt=f'''You are a skilled Data Analysis Supervisor, guiding a Data Analyst. Here is a snippet of the data {df.head(20)} of the dataset {file_name}. Use to frame some research questions. Just the questions.'''
+    prompt = f'''You are a skilled Data Analysis Supervisor, guiding a Data Analyst. Here is a snippet of the data {df.head(20)} of the dataset {file_name}. Use to frame some research questions. Just the questions.'''
     return request_api_data(prompt)
-def generate_narrative(analysis,df, que):
+
+def generate_narrative(analysis, df, que):
     """Generate narrative using LLM."""
-    prompt = f'''You are a skilled Data Analyst tasked with providing insights from a dataset with the following columns {df.columns}. The dataset has been analyzed and pre-processed, and here are the key results in the form of a dictionary: {analysis}. Use the analysis to answer the  questions {que}. 
-
-Based on this data analysis, generate a detailed README.md document that provides:
-1. A brief summary of the dataset (including its general structure, types of variables, and the analysis objectives).
-2. Insights derived from the statistical analysis (such as trends, correlations, and patterns in the data).
-3. A description of the findings related to any outliers, class imbalances, skewness, and kurtosis.
-4. An interpretation of the correlation matrix, highlighting key relationships between variables.
-5. Any actionable recommendations or considerations based on the feature importance and class imbalance (if applicable).
-6. Visuals have already been generated and included in the directory. Incorporate the following visualizations into your narrative:
-    - 'correlation_heatmap.png': A heatmap of correlations between numerical variables.
-    - 'numeric_columns_boxplot.png': Boxplots of numerical columns for distribution and outlier visualization.
-    - 'scatter_matrix.png': A scatter plot matrix for visualizing pairwise relationships between the first five numerical features.
-
-Do not include any code or technical details outside of the README content. Focus on providing a clear, professional, and insightful narrative suitable for a non-technical audience, with a focus on how the data can be interpreted and utilized for further analysis or decision-making.'''
+    prompt = f'''You are a skilled Data Analyst tasked with providing insights from a dataset with the following columns {df.columns}. The dataset has been analyzed and pre-processed, and here are the key results in the form of a dictionary: {analysis}. Use the analysis to answer the questions {que}.'''
 
     return request_api_data(prompt)
 
@@ -286,10 +270,12 @@ def main(file_path):
     df = load_data(file_path)
     analysis = analyze_data(df)
     visualize_data(df)
-    que=str(generate_questions(df))
-    narrative = str(generate_narrative(analysis,df,str))
+    que = generate_questions(df)
+    narrative = generate_narrative(analysis, df, que)
+    
     narrative = narrative.replace('```', '').strip()
     narrative = narrative.replace('markdown', '').strip()
+    
     if narrative != "Narrative generation failed.":
         with open('README.md', 'w') as f:
             f.write(narrative)
@@ -297,6 +283,8 @@ def main(file_path):
     else:
         print("Narrative generation failed.")
 
+
+# === Entry Point ===
 if __name__ == "__main__":
     if len(sys.argv) != 2:
         print("Usage: python autolysis.py <file_path>")

@@ -1,10 +1,13 @@
-import requests
-import io
+import urllib.request
+import json
 import pandas as pd
 import numpy as np
 import subprocess
 import argparse
 import sys
+import os
+import io
+
 
 AIPROXY_TOKEN = 'eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6IjIzZjEwMDEyOTlAZHMuc3R1ZHkuaWl0bS5hYy5pbiJ9.9BoDuWYF8sOQx36Z4T2Y92P7SqKgLXT1K9Vn2DjepiY' 
 
@@ -40,7 +43,46 @@ for idx in indices:
 # Create a new DataFrame with the selected rows
 data_text = pd.DataFrame(selected_rows)
 
-
+def request_api_data(prompt):
+    """Send the request to the external API for plan generation or code."""
+    url = "https://aiproxy.sanand.workers.dev/openai/v1/chat/completions"
+    
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {AIPROXY_TOKEN}"
+    }
+    
+    data = {
+        "model": "gpt-4o-mini",
+        "messages": [{"role": "system", "content": "You are a helpful Data Analyst."},
+                     {"role": "user", "content": prompt}]
+    }
+    
+    # Convert the dictionary to a JSON string
+    json_data = json.dumps(data).encode('utf-8')
+    
+    # Create a request object with the URL, data, and headers
+    req = urllib.request.Request(url, data=json_data, headers=headers, method='POST')
+    
+    try:
+        # Send the request and get the response
+        with urllib.request.urlopen(req) as response:
+            response_data = json.load(response)  # Parse the JSON response
+            return response_data['choices'][0]['message']['content']
+    
+    except urllib.error.HTTPError as e:
+        error_msg = e.read().decode()
+        print(f"HTTPError: {e.code} - {error_msg}")
+        return {"error": f"HTTPError: {e.code}", "details": error_msg}
+    
+    except urllib.error.URLError as e:
+        print(f"URLError: {e.reason}")
+        return {"error": "URLError", "details": str(e.reason)}
+    
+    except Exception as e:
+        print(f"An error occurred: {str(e)}")
+        return {"error": "Unknown error", "details": str(e)}
+    
 def generate_plan(data_text):
     prompt = f"""
     Here is a portion of a dataset:
@@ -61,27 +103,7 @@ def generate_plan(data_text):
     6. Text-Based Responses: Please provide all answers in text form. Do not include any code.
     """
 
-    url = "https://aiproxy.sanand.workers.dev/openai/v1/chat/completions"
-    
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {AIPROXY_TOKEN}"
-    }
-    
-    data = {
-        "model": "gpt-4o-mini",  
-        "messages": [
-            {"role": "system", "content": "You are a helpful Data Analysis Manager."},
-            {"role": "user", "content": prompt}
-        ]
-    }
-    
-    response = requests.post(url, headers=headers, json=data)
-    
-    if response.status_code == 200:
-        return response.json()['choices'][0]['message']['content']
-    else:
-        return {"error": f"Request failed with status code {response.status_code}", "details": response.json()}
+    return request_api_data(prompt)
 
 def generate_code(plan):
     prompt = f"""
@@ -117,30 +139,7 @@ GUIDELINES FOR ANALYSIS OF THE SPECIFIC DATASET: {plan}
     **WHILE WRITING CODE, ENSURE THAT IT IS NOT TOO COMPLICATED TO AVOID ERRORS**
     **ENSURE THAT 
     """
-    url = "https://aiproxy.sanand.workers.dev/openai/v1/chat/completions"
-    
-    # Define the request headers
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {AIPROXY_TOKEN}"
-    }
-    
-    # Define the request data
-    data = {
-        "model": "gpt-4o-mini",  # Model supported by AI Proxy
-        "messages": [
-            {"role": "system", "content": "You are a helpful Data Analyst."},
-            {"role": "user", "content": prompt}
-        ]
-    }
-
-    
-    response = requests.post(url, headers=headers, json=data)
-    if response.status_code == 200:
-        return (response.json()['choices'][0]['message']['content'])  # Print the response from the proxy
-    else:
-        # Handle errors if the request fails
-        return {"error": f"Request failed with status code {response.status_code}", "details": response.json()}
+    return request_api_data(prompt)
 
 
 def run_code(code):
@@ -174,42 +173,18 @@ def generate_report(plan,code,dictionary):
     **Ensure that all or most of the relevant plots are in the README.md**
     """
      
-    url = "https://aiproxy.sanand.workers.dev/openai/v1/chat/completions"
-    
-    # Define the request headers
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {AIPROXY_TOKEN}"
-    }
-    
-    # Define the request data
-    data = {
-        "model": "gpt-4o-mini",  # Model supported by AI Proxy
-        "messages": [
-            {"role": "system", "content": "You are a helpful Data Analyst."},
-            {"role": "user", "content": prompt}
-        ]
-    }
-    response = requests.post(url, headers=headers, json=data)
-    if response.status_code == 200:
-        return (response.json()['choices'][0]['message']['content'])  # Print the response from the proxy
-    else:
-        # Handle errors if the request fails
-        return {"error": f"Request failed with status code {response.status_code}", "details": response.json()}
+    return request_api_data(prompt)
 
 
 def main(): 
-    with open("output2.txt", "w") as file:
-        plan = generate_plan(data_text)
-        file.write(plan)
-        code = generate_code(plan)
-        code = code.replace('python', '').strip()
-        code  = code.replace('```', '').strip()
-        file.write(code)
-        dictionary = run_code(code)
-        file.write(dictionary)
-        report = generate_report(plan, code, dictionary)
-        file.write(report)       
+    plan = generate_plan(data_text)
+    code = generate_code(plan)
+    code = code.replace('python', '').strip()
+    code  = code.replace('```', '').strip()
+    dictionary = run_code(code)
+    report = generate_report(plan, code, dictionary)
+    report = report.replace('markdown', '').strip()
+    report  = report.replace('```', '').strip()
     with open('README.md', 'w') as file:
         file.write(report)
 

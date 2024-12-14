@@ -8,29 +8,25 @@
 # ///
 
 
-
 import os
 import sys
 import json
 import pandas as pd
 import seaborn as sns
-import matplotlib
-matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-
 import http.client
 import argparse
 import io
-import sys
 
 # Constants
 API_URL = "/openai/v1/chat/completions"
-AIPROXY_TOKEN = os.getenv("AIPROXY_TOKEN")  # Now using env variable#
+AIPROXY_TOKEN = os.getenv("AIPROXY_TOKEN")  # Now using env variable
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Data Analysis Script")
     parser.add_argument('filename', type=str, help='Path to the CSV file')
     return parser.parse_args()
+
 args = parse_args()
 file_path = args.filename 
 
@@ -55,7 +51,7 @@ def load_data(file_path):
     sys.exit(1)
 
 def analyze_data(df):
-    """Perform basic data analysis."""
+    """Perform basic data analysis including feature importance and outlier treatment."""
     if df.empty:
         print("Error: Dataset is empty.")
         return None
@@ -89,6 +85,12 @@ def analyze_data(df):
     outliers = ((numeric_df < (Q1 - 1.5 * IQR)) | (numeric_df > (Q3 + 1.5 * IQR)))
     analysis['outliers'] = outliers.sum().to_dict()
 
+    # Treating outliers by capping values (optional, if required)
+    capped_df = numeric_df.copy()
+    for column in numeric_df.columns:
+        capped_df[column] = numeric_df[column].clip(lower=Q1[column] - 1.5 * IQR[column], upper=Q3[column] + 1.5 * IQR[column])
+    analysis['outliers_treated'] = capped_df.describe().to_dict()
+
     # 7. Class imbalance (for a target column, change 'target' to your column name)
     target_column = 'target'  # Change this as needed
     if target_column in df.columns:
@@ -107,6 +109,7 @@ def analyze_data(df):
 
     print("Data analysis complete.")
     return analysis
+
 def visualize_data(df):
     """Generate and save general visualizations for numerical and categorical data."""
     sns.set_theme(style="whitegrid")
@@ -150,7 +153,6 @@ def visualize_data(df):
         print("Scatter plot matrix generated.")
     else:
         print("Insufficient numeric columns for scatter matrix.")
-
 
 def request_api_data(prompt):
     """Send request to API for narrative generation using http.client."""
@@ -215,8 +217,8 @@ def main(file_path):
     analysis = analyze_data(df)
     visualize_data(df)
     narrative = str(generate_narrative(analysis))
-    narrative=narrative.replace('```', '').strip()
-    narrative=narrative.replace('markdown', '').strip()
+    narrative = narrative.replace('```', '').strip()
+    narrative = narrative.replace('markdown', '').strip()
     if narrative != "Narrative generation failed.":
         with open('README.md', 'w') as f:
             f.write(narrative)
@@ -229,5 +231,3 @@ if __name__ == "__main__":
         print("Usage: python autolysis.py <file_path>")
         sys.exit(1)
     main(sys.argv[1])
-
-

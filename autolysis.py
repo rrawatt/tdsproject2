@@ -20,9 +20,6 @@ import http.client
 import argparse
 import io
 
-# Constants
-API_URL = "/openai/v1/chat/completions"
-AIPROXY_TOKEN = os.getenv("AIPROXY_TOKEN")  # Now using env variable
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Data Analysis Script")
@@ -159,6 +156,8 @@ def visualize_data(df):
 
 def request_api_data(prompt):
     """Send request to API for narrative generation using http.client."""
+    API_URL = "/openai/v1/chat/completions"
+    AIPROXY_TOKEN = os.getenv("AIPROXY_TOKEN")  # Now using env variable
     # Define the host and endpoint
     host = "aiproxy.sanand.workers.dev"
     endpoint = "/openai/v1/chat/completions"
@@ -207,9 +206,12 @@ def request_api_data(prompt):
         # Always close the connection to avoid any resource leaks
         conn.close()
 
-def generate_narrative(analysis,df):
+def generate_questions(df):
+    prompt=f'''You are a skilled Data Analysis Supervisor, guiding a Data Analyst. Here is a snippet of the data {df.head(20)} of the dataset {file_name}. Use to frame some research questions. Just the questions.'''
+    return request_api_data(prompt)
+def generate_narrative(analysis,df, que):
     """Generate narrative using LLM."""
-    prompt = f'''You are a skilled Data Analyst tasked with providing insights from a dataset with the following columns {df.columns}. The dataset has been analyzed and pre-processed, and here are the key results in the form of a dictionary: {analysis}. 
+    prompt = f'''You are a skilled Data Analyst tasked with providing insights from a dataset with the following columns {df.columns}. The dataset has been analyzed and pre-processed, and here are the key results in the form of a dictionary: {analysis}. Use the analysis to answer the  questions {que}. 
 
 Based on this data analysis, generate a detailed README.md document that provides:
 1. A brief summary of the dataset (including its general structure, types of variables, and the analysis objectives).
@@ -230,7 +232,8 @@ def main(file_path):
     df = load_data(file_path)
     analysis = analyze_data(df)
     visualize_data(df)
-    narrative = str(generate_narrative(analysis,df))
+    que=str(generate_questions(df))
+    narrative = str(generate_narrative(analysis,df,str))
     narrative = narrative.replace('```', '').strip()
     narrative = narrative.replace('markdown', '').strip()
     if narrative != "Narrative generation failed.":

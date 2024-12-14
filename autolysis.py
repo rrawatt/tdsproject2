@@ -1,15 +1,10 @@
-import urllib.request
 import json
+import http.client
 import pandas as pd
 import numpy as np
-import subprocess
 import argparse
-import sys
-import os
-import io
 
-
-AIPROXY_TOKEN = 'eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6IjIzZjEwMDEyOTlAZHMuc3R1ZHkuaWl0bS5hYy5pbiJ9.9BoDuWYF8sOQx36Z4T2Y92P7SqKgLXT1K9Vn2DjepiY' 
+AIPROXY_TOKEN = 'token' 
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Data Analysis Script")
@@ -44,45 +39,53 @@ for idx in indices:
 data_text = pd.DataFrame(selected_rows)
 
 def request_api_data(prompt):
-    """Send the request to the external API for plan generation or code."""
-    url = "https://aiproxy.sanand.workers.dev/openai/v1/chat/completions"
+    """Send the request to the external API for plan generation or code using http.client."""
+    # Define the host and endpoint
+    host = "aiproxy.sanand.workers.dev"
+    endpoint = "/openai/v1/chat/completions"
     
     headers = {
         "Content-Type": "application/json",
         "Authorization": f"Bearer {AIPROXY_TOKEN}"
     }
-    
+
+    # Data to send in the request
     data = {
         "model": "gpt-4o-mini",
         "messages": [{"role": "system", "content": "You are a helpful Data Analyst."},
                      {"role": "user", "content": prompt}]
     }
-    
-    # Convert the dictionary to a JSON string
-    json_data = json.dumps(data).encode('utf-8')
-    
-    # Create a request object with the URL, data, and headers
-    req = urllib.request.Request(url, data=json_data, headers=headers, method='POST')
-    
+
+    # Convert data to JSON string
+    json_data = json.dumps(data)
+
+    # Create a connection to the host
+    conn = http.client.HTTPSConnection(host)
+
     try:
-        # Send the request and get the response
-        with urllib.request.urlopen(req) as response:
-            response_data = json.load(response)  # Parse the JSON response
-            return response_data['choices'][0]['message']['content']
-    
-    except urllib.error.HTTPError as e:
-        error_msg = e.read().decode()
-        print(f"HTTPError: {e.code} - {error_msg}")
-        return {"error": f"HTTPError: {e.code}", "details": error_msg}
-    
-    except urllib.error.URLError as e:
-        print(f"URLError: {e.reason}")
-        return {"error": "URLError", "details": str(e.reason)}
-    
+        # Send the POST request
+        conn.request("POST", endpoint, body=json_data, headers=headers)
+
+        # Get the response
+        response = conn.getresponse()
+        response_data = response.read().decode()  # Read and decode the response
+
+        # Check if response is successful (status code 200-299)
+        if response.status >= 200 and response.status < 300:
+            response_json = json.loads(response_data)
+            return response_json['choices'][0]['message']['content']
+        else:
+            print(f"HTTPError: {response.status} - {response_data}")
+            return {"error": f"HTTPError: {response.status}", "details": response_data}
+
     except Exception as e:
         print(f"An error occurred: {str(e)}")
         return {"error": "Unknown error", "details": str(e)}
     
+    finally:
+        # Always close the connection
+        conn.close()
+
 def generate_plan(data_text):
     prompt = f"""
     Here is a portion of a dataset:
@@ -104,7 +107,7 @@ def generate_plan(data_text):
     """
 
     return request_api_data(prompt)
-
+'''
 def generate_code(plan):
     prompt = f"""
 You will be given some information and guidelines. Your role is to do accordingly and write the code in Python for the Data Analysis as prescribed for the research.
@@ -177,16 +180,21 @@ def generate_report(plan,code,dictionary):
 
 
 def main(): 
-    plan = generate_plan(data_text)
-    code = generate_code(plan)
-    code = code.replace('python', '').strip()
-    code  = code.replace('```', '').strip()
-    dictionary = run_code(code)
-    report = generate_report(plan, code, dictionary)
-    report = report.replace('markdown', '').strip()
-    report  = report.replace('```', '').strip()
+    with open("output2.txt", "w") as file:
+        plan = generate_plan(data_text)
+        file.write(plan)
+        code = generate_code(plan)
+        code = code.replace('python', '').strip()
+        code  = code.replace('```', '').strip()
+        file.write(code)
+        dictionary = run_code(code)
+        file.write(dictionary)
+        report = generate_report(plan, code, dictionary)
+        file.write(report)       
     with open('README.md', 'w') as file:
-        file.write(report)
+        file.write(report)'''
 
+def main():
+    print()
 if __name__ == "__main__":
     main()

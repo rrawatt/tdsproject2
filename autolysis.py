@@ -13,6 +13,8 @@ import sys
 import json
 import pandas as pd
 import seaborn as sns
+import matplotlib
+matplotlib.use('Agg')  # Use the non-interactive backend
 import matplotlib.pyplot as plt
 import http.client
 import argparse

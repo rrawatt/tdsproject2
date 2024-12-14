@@ -207,9 +207,9 @@ def request_api_data(prompt):
         # Always close the connection to avoid any resource leaks
         conn.close()
 
-def generate_narrative(analysis):
+def generate_narrative(analysis,df):
     """Generate narrative using LLM."""
-    prompt = f'''You are a skilled Data Analyst tasked with providing insights from a dataset. The dataset has been analyzed and pre-processed, and here are the key results in the form of a dictionary: {analysis}. 
+    prompt = f'''You are a skilled Data Analyst tasked with providing insights from a dataset with the following columns {df.columns}. The dataset has been analyzed and pre-processed, and here are the key results in the form of a dictionary: {analysis}. 
 
 Based on this data analysis, generate a detailed README.md document that provides:
 1. A brief summary of the dataset (including its general structure, types of variables, and the analysis objectives).
@@ -230,7 +230,7 @@ def main(file_path):
     df = load_data(file_path)
     analysis = analyze_data(df)
     visualize_data(df)
-    narrative = str(generate_narrative(analysis))
+    narrative = str(generate_narrative(analysis,df))
     narrative = narrative.replace('```', '').strip()
     narrative = narrative.replace('markdown', '').strip()
     if narrative != "Narrative generation failed.":

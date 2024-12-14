@@ -4,6 +4,9 @@
 #   "seaborn",
 #   "pandas",
 #   "matplotlib",
+#   "scikit.learn",
+#   "scipy"
+#   "numpy"
 # ]
 # ///
 
@@ -18,7 +21,9 @@ matplotlib.use('Agg')  # Use the non-interactive backend
 import matplotlib.pyplot as plt
 import http.client
 import argparse
-import io
+from sklearn.decomposition import PCA
+from scipy.stats import chi2_contingency, f_oneway
+import numpy as np
 
 
 def parse_args():
@@ -51,7 +56,7 @@ def load_data(file_path):
     sys.exit(1)
 
 def analyze_data(df):
-    """Perform basic data analysis including feature importance and outlier treatment."""
+    """Perform comprehensive data analysis including summary statistics, missing values, outlier detection, skewness, kurtosis, PCA, Chi-Squared, ANOVA, and feature importance."""
     if df.empty:
         print("Error: Dataset is empty.")
         return None
@@ -65,18 +70,26 @@ def analyze_data(df):
 
     # 1. Summary statistics
     analysis['summary'] = df.describe(include='all').to_dict()
+    print("Summary statistics calculated.")
+
+    # Interpretation for Summary:
+    # Provides an overview of central tendency, spread, and shape. It helps identify extreme values, potential issues, and the overall structure.
 
     # 2. Missing values
     analysis['missing_values'] = df.isnull().sum().to_dict()
+    print("Missing values analysis complete.")
 
     # 3. Correlation (for numeric columns only)
     analysis['correlation'] = numeric_df.corr().to_dict()
+    print("Correlation analysis complete.")
 
     # 4. Skewness
     analysis['skewness'] = numeric_df.skew().to_dict()
+    print("Skewness analysis complete.")
 
     # 5. Kurtosis
     analysis['kurtosis'] = numeric_df.kurtosis().to_dict()
+    print("Kurtosis analysis complete.")
 
     # 6. Outlier detection (using IQR method)
     Q1 = numeric_df.quantile(0.25)
@@ -84,17 +97,20 @@ def analyze_data(df):
     IQR = Q3 - Q1
     outliers = ((numeric_df < (Q1 - 1.5 * IQR)) | (numeric_df > (Q3 + 1.5 * IQR)))
     analysis['outliers'] = outliers.sum().to_dict()
+    print("Outlier detection complete.")
 
-    # Treating outliers by capping values (optional, if required)
+    # Treating outliers by capping values (optional)
     capped_df = numeric_df.copy()
     for column in numeric_df.columns:
         capped_df[column] = numeric_df[column].clip(lower=Q1[column] - 1.5 * IQR[column], upper=Q3[column] + 1.5 * IQR[column])
     analysis['outliers_treated'] = capped_df.describe().to_dict()
+    print("Outliers treated by capping values.")
 
     # 7. Class imbalance (for a target column, change 'target' to your column name)
     target_column = 'target'  # Change this as needed
     if target_column in df.columns:
         analysis['class_imbalance'] = df[target_column].value_counts().to_dict()
+        print(f"Class imbalance analysis complete for target column '{target_column}'.")
     else:
         print(f"Target column '{target_column}' not found.")
         analysis['class_imbalance'] = {}
@@ -103,12 +119,50 @@ def analyze_data(df):
     if target_column in df.columns:
         corr_with_target = numeric_df.corrwith(df[target_column])
         analysis['feature_importance'] = corr_with_target.to_dict()
+        print(f"Feature importance analysis complete based on correlation with target column '{target_column}'.")
     else:
         print(f"Target column '{target_column}' not found.")
         analysis['feature_importance'] = {}
 
-    print("Data analysis complete.")
-    return analysis
+    # PCA: Principal Component Analysis for dimensionality reduction
+    if len(numeric_df.columns) > 1:
+        pca = PCA(n_components=2)  # You can change the number of components as needed
+        pca_result = pca.fit_transform(numeric_df)
+        explained_variance = pca.explained_variance_ratio_
+        analysis['PCA'] = {
+            'explained_variance': explained_variance.tolist(),
+            'principal_components': pca_result.tolist()
+        }
+        print("PCA analysis complete. Explained variance and principal components extracted.")
+    else:
+        print("PCA cannot be performed with only one numeric column.")
+
+    # Chi-Squared Test: For independence between categorical variables
+    chi_squared_results = []
+    if len(categorical_df.columns) > 1:
+        for col1 in categorical_df.columns:
+            for col2 in categorical_df.columns:
+                if col1 != col2:
+                    contingency_table = pd.crosstab(categorical_df[col1], categorical_df[col2])
+                    chi2, p_val, _, _ = chi2_contingency(contingency_table)
+                    chi_squared_results.append((col1, col2, chi2, p_val))
+        analysis['chi_squared'] = chi_squared_results
+        print("Chi-Squared Test complete for categorical variables.")
+    else:
+        print("Not enough categorical variables to perform Chi-Squared Test.")
+
+    # ANOVA (Analysis of Variance): To test significant differences between group means
+    if len(categorical_df.columns) > 0 and len(numeric_df.columns) > 0:
+        anova_results = []
+        for cat_col in categorical_df.columns:
+            for num_col in numeric_df.columns:
+                groups = [numeric_df[num_col][df[cat_col] == group] for group in df[cat_col].unique()]
+                f_stat, p_val = f_oneway(*groups)
+                anova_results.append((cat_col, num_col, f_stat, p_val))
+        analysis['anova'] = anova_results
+        print("ANOVA analysis complete for comparing means across categories.")
+    else:
+        print("Not enough categorical or numeric variables to perform ANOVA.")
 
 def visualize_data(df):
     """Generate and save general visualizations for numerical and categorical data."""
